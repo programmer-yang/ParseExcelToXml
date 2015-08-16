@@ -1,16 +1,21 @@
 var mexcel = require('node-xlsx');
 var XMLFactory = require('simple-xml-writer'),
-	fs = require('fs');
+	fs = require('fs'),
+	EventProxy = require('eventproxy');
 var TaskFactory = require("./taskFactory.js");
 
 
 
+var ep = new EventProxy();
 
 
+TaskFactory.init(ep,function(publicHead){
 
-var sheets = mexcel.parse('data/abc.xlsx');
+	var sheets = mexcel.parse('data/abc.xlsx');
+	TaskFactory.getTask(sheets, publicHead);
 
-TaskFactory.getTask(sheets);
+});
+
 
 
 // for(var sheetIndex in sheet) {

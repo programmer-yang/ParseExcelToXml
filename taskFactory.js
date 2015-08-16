@@ -1,6 +1,7 @@
 var systems = require("./systems.js"),
     parsexml = require("./parsexml.js"),
     writefile = require("./writefile.js");
+var fs = require("fs");
 
 /**
 *  任务工厂
@@ -8,9 +9,109 @@ var systems = require("./systems.js"),
 */
 
 /**
+*  任务开始前的准备工作
+*/
+function init(ep,fuc) {
+  log("初始化任务开始");
+  ep.all("publicHead",function(publicHead){
+    log("获取公共头成功");
+    fuc(publicHead);
+  });
+
+  log("初始化公共头");
+  readPublicHead(ep);
+  //...
+
+}
+
+/**
+*  读取公共头
+*/
+function readPublicHead(ep){
+  log("开始读取公共头");
+  var dirpath = "./template/";
+  var publicHead = {};
+  fs.readdir(dirpath,function(err,files){
+    if(err){
+      console.log("error:"+err);
+    }
+    // log(publicHead[0]);
+    ep.after('readHead',files.length,function(heads){
+      // console.log("haha");
+      ep.emit('publicHead',publicHead);
+    });
+
+    for (var i = 0; i < files.length; i++) {
+      var fileName = files[i];
+      //
+      var name = fileName.substring(0,fileName.indexOf('_'));
+      var type = fileName.substring(fileName.indexOf('_')+1,fileName.indexOf('.xml'));
+      publicHead[name] = {};
+      publicHead[name][type] = {};
+
+      (function(name,type){
+        fs.readFile(dirpath+fileName,'UTF-8',function(err,data){
+          //
+          publicHead[name][type] = trimLines(data);
+          // log(name+type+"***");
+          ep.emit('readHead',null);
+
+        });
+      })(name,type);
+
+
+    }
+
+  });
+
+}
+
+function trimLines(data){
+  var lines = data.split("\r\n");
+
+  var heads = [];
+  var heads_i = 0;
+  var heads_str = "";
+  // log(lines);
+  for(var i = 0; i < lines.length; i++){
+    if(lines[i].indexOf("<!---")>0){
+
+      heads[heads_i] = {type:"data",data:heads_str};
+      heads_i++;
+      heads_str = "";
+
+      var reg = /^ +<!---/;
+      if(reg.test(lines[i])){
+        //整行插入型数据
+        var name = lines[i];
+        name = name.substring(name.indexOf('<!---')+6,name.indexOf('-->')-1);
+        heads[heads_i] = {type:"line",data:name,blank:(lines[i].indexOf('<!---'))/2};
+        heads_i++;
+      }else{
+        //** 中间插入型标识
+        //placeholder
+      }
+      // log("***");
+
+    }else{
+      heads_str += lines[i] + "\r\n";
+      // log(heads_str)
+      // log(lines[i]);
+    }
+    if(i == lines.length-1){
+
+      heads[heads_i] = {type:"data",data:heads_str};
+    }
+  }
+  // log(heads[0].data+heads[1].data+heads[2].data);
+  return heads;
+}
+
+
+/**
 *  任务数据获取方法
 */
-function getTask(sheets){
+function getTask(sheets,publicHead){
   log("任务开始");
   if(sheets==null || sheets.length<=0){
     log("页签集为空，请检查选中的excel是否正确");
@@ -21,7 +122,7 @@ function getTask(sheets){
   var taskList = {};
   var taskData = {};
   for(var n in sheets){
-    // console.log("循环一次");
+    // log("循环一次");
     var sheet = sheets[n];
     var datas = "";
     if(sheet.name === "索引"){
@@ -59,16 +160,16 @@ function getTask(sheets){
   }
   log("获取任务集合成功");
   log("===========");
-  console.log(taskList);
+  log(taskList);
   log("===========");
 
-  trimTask(taskList, taskData);
+  trimTask(taskList, taskData, publicHead);
 }
 
 /**
 *  任务处理方法
 **/
-function trimTask(taskList, taskData){
+function trimTask(taskList, taskData, publicHead){
   log("进入任务处理方法，开始遍历任务集合");
 
   if(!taskList || !taskData){
@@ -77,8 +178,8 @@ function trimTask(taskList, taskData){
     return;
   }
   var task = {};
-  task.filenames = new Array("in_parser","in_packer","in_server",
-                            "out_parser","out_packer","out_server");
+  // task.filenames = new Array("in_parser","in_packer","in_server",
+  //                           "out_parser","out_packer","out_server");
   for(var n in taskList){
 
     task.name = n;
@@ -98,9 +199,20 @@ function trimTask(taskList, taskData){
     }
     log("获取任务【"+task.name+"】页签【"+task.path+"】 原始数据成功");
 
+    var tasktype = task.consumer+'2'+task.provider;
+
     var xmldata = getNatpToXmlData(task, sheetData);
 
-    writefile.write(xmldata);
+    task.type = tasktype;
+    task.data = xmldata;
+    // task.publicHead = publicHead
+
+    // log("Test");
+    // log(task);
+    task.publicHead = publicHead[task.type];
+    // // log(task);
+    // return;
+    writefile.write(task);
 
     //测试使用，执行一次
     break;
@@ -110,61 +222,6 @@ function trimTask(taskList, taskData){
 function getNatpToXmlData(task,taskData){
   //获取配置数据
   log("开始处理【"+task.name+"】原始数据");
-
-  //in端拆包公共头
-  // var in_public_head_parser = [
-  //   {name:"Transcode",args:[
-  //     {name:"isSdoHeader",value:"true"},{name:"chinese_name",value:"交易代码"},
-  //     {name:"length",value:"20"},{name:"isNatpHead",value:"true"}
-  //   ]},{name:"TemplateCode",args:[
-  //     {name:"isSdoHeader",value:"true"},{name:"chinese_name",value:"模板代码"},
-  //     {name:"length",value:"20"},{name:"isNatpHead",value:"true"}
-  //   ]},{name:"ReservedCode",args:[
-  //     {name:"isSdoHeader",value:"true"},{name:"chinese_name",value:"保留代码"},
-  //     {name:"length",value:"20"},{name:"isNatpHead",value:"true"}
-  //   ]},{name:"TranFileFlag",args:[
-  //     {name:"metadataid",value:"FilFlg"},{name:"chinese_name",value:"文件标志"}
-  //   ]},{name:"TranDate",args:[
-  //     {name:"metadataid",value:"TranDate"},{name:"chinese_name",value:"交易日期"}
-  //   ]},{name:"Teller",args:[
-  //     {name:"metadataid",value:"TellerNo"},{name:"chinese_name",value:"柜员号"}
-  //   ]},{name:"TermId",args:[
-  //     {name:"metadataid",value:"TerminalCode"},{name:"chinese_name",value:"终端号"}
-  //   ]},{name:"Brc",args:[
-  //     {name:"metadataid",value:"BranchId"},{name:"chinese_name",value:"机构代码"}
-  //   ]}
-  // ];
-  //
-  // //in端组包公共头
-  // var in_public_head_packer = [
-  //   {name:"Transcode",args:[
-  //     {name:"isSdoHeader",value:"true"},{name:"chinese_name",value:"交易代码"},
-  //     {name:"length",value:"20"},{name:"isNatpHead",value:"true"}
-  //   ]},{name:"TemplateCode",args:[
-  //     {name:"isSdoHeader",value:"true"},{name:"chinese_name",value:"模板代码"},
-  //     {name:"length",value:"20"},{name:"isNatpHead",value:"true"}
-  //   ]},{name:"ReservedCode",args:[
-  //     {name:"isSdoHeader",value:"true"},{name:"chinese_name",value:"保留代码"},
-  //     {name:"length",value:"20"},{name:"isNatpHead",value:"true"}
-  //   ]},{name:"khm",args:[
-  //     {name:"metadataid",value:"CstNo"},{name:"chinese_name",value:"客户号"}
-  //   ]},{name:"khmc",args:[
-  //     {name:"metadataid",value:"CstNm"},{name:"chinese_name",value:"客户名称"}
-  //   ]},{name:"jjbh",args:[
-  //     {name:"metadataid",value:"OutInLibCd"},{name:"chinese_name",value:"出入库编号"}
-  //   ]},{name:"TermId",args:[
-  //     {name:"metadataid",value:"TerminalCode"},{name:"chinese_name",value:"终端号"}
-  //   ]},{name:"Brc",args:[
-  //     {name:"metadataid",value:"BranchId"},{name:"chinese_name",value:"机构代码"}
-  //   ]}
-  // ];
-
-  // var in_public_head_parser = systems.getPublicHead("CSTOCRMS","in_parser",task);
-  // var in_public_head_packer = systems.getPublicHead("CSTOCRMS","in_packer",task);
-
-  // console.log("test print");
-  // console.log(in_public_head_parser);
-
 
 
   var in_parser_data = new Array();
@@ -223,10 +280,11 @@ function getNatpToXmlData(task,taskData){
 
   //in
   var in_parser = {};
+  in_parser.type = "in_parser";
   in_parser.filePath = "./tmp/"+task.name+"/in/";
   in_parser.fileName = "channel_"+task.consumer+"_service_"+task.name+".xml";
-  in_parser.publicData = {};
-  in_parser.publicData.type = "in_parser";//拼公共头用
+  // in_parser.publicData = {};
+  // in_parser.publicData.type = "in_parser";
   in_parser.fileData = {};
   in_parser.fileData.name = "message";
   in_parser.fileData.args = new Array({name:"package_type",value:"natp"},{name:"store-mode",value:"GBK"});
@@ -328,5 +386,5 @@ function log(str){
   console.log(new Date().toLocaleTimeString()+" # " + str + " ");
 }
 
-
+exports.init = init;
 exports.getTask = getTask;

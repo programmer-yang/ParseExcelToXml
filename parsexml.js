@@ -45,25 +45,30 @@ function xmlFactory() {
 
 	// console.log(xmlstr.args.length);
 	// return;
+	// xmlstr = {};
+	var data = parseXmlStr(xmlstr,true,0);
 
-	var data = parseXmlStr(xmlstr);
-
-	console.log(data.toString());
+	console.log(data.data);
 
 }
 
-//测试
+// 测试
 // xmlFactory();
 
 
 function parseXmlStr(str,declaration,level) {
 
 	str = str || {};
-	declaration = declaration || true;
+	// declaration = declaration || true;
+
 	level = level || 0;
+	declaration = declaration == undefined ? true : level > 0 ? false : declaration;
 	var options =  {};
 	options.declaration = declaration;
-	options.level = level;
+
+	options.level = level>0?level-1:level;
+	// options.level = level;
+	// console.log(level+":"+options.level);
 
 	var data = new XMLFactory.XmlWriter(function(el){
 
@@ -120,6 +125,21 @@ function parseXmlStr(str,declaration,level) {
 
 	}
 
+	if(level>0){
+		// console.log("截首尾行");
+
+		var lines = data.data.toString().split('\r\n');
+		// console.log(lines);
+		var newdata = "";
+			// console.log(lines.length);
+		var n = declaration ? 1 : 0;
+		for (var i = 1 + n; i < lines.length-1; i++) {
+			newdata += lines[i] + "\r\n";
+			// console.log(lines[i]);
+		}
+		// console.log(newdata);
+		data.data = newdata;
+	}
 	return data;
 
 }

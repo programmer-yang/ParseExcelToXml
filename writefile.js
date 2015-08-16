@@ -3,84 +3,51 @@ var fs = require("fs"),
     path = require("path");
 var parsexml = require("./parsexml.js");
 
-
-
-/**
-*  读取公共头
-*/
-(function readPublicHead(){
-  log("开始读取公共头");
-  fs.readFile("./template/public_head_in_parser.xml", "UTF-8", function(err,data){
-    if(err){
-      log("error");
-      log("阅读公共头失败");
-      return;
-    }
-
-    var lines = data.split("\r\n");
-
-    var heads = [];
-    var heads_i = 0;
-    var heads_str = "";
-    // console.log(lines);
-    for(var i = 0; i < lines.length; i++){
-      if(lines[i].indexOf("<!---")>0){
-
-        var reg = /^ +<!---/;
-        if(reg.test(lines[i])){
-          //整行插入型数据
-
-
-
-        }else{
-          //** 中间插入型标识
-        }
-        // console.log("***");
-        heads[heads_i] = heads_str;
-        heads_i++;
-        heads_str = "";
-      }else{
-        heads_str += lines[i] + "\r\n";
-        // log(heads_str)
-        // console.log(lines[i]);
-      }
-    }
-    if(heads_str != null && heads_str.length>0){
-      heads[heads_i] = heads_str;
-    }
-
-
-    log(heads);
-
-
-  });
-})();
-
-
 function writeFileFactory(tasks){
   if(!tasks){
     log("error");
     log("tasks is null");
     return;
   }
+
   var fileCoding = "UTF-8";
 
-  for(var n in tasks){
-    var filePath = tasks[n].filePath;
-    var fileName = tasks[n].fileName;
-    var fileData = parsexml.parseXmlStr(tasks[n].fileData);
+
+  for(var n in tasks.data){
+
+    // console.log("TEST");
+    var newxmldata = "";
+    tasks.publicHead[tasks.data[n].type].forEach(function(data){
+      if(data.type === "data"){
+        newxmldata += data.data + "\n";
+      }else if(data.type === "line"){
+        // console.log(" *** ");
+        // console.log(data);
+        // console.log(tasks.data[n]);
+        newxmldata += parsexml.parseXmlStr(tasks.data[n].fileData,false,data.blank).data + "\n";
+      }
+    });
+    // console.log(newxmldata);
+    //拼公共头
+    // return;
+
+
+    // var filePath = tasks[n].filePath;
+    // var fileName = tasks[n].fileName;
+    // var fileData = parsexml.parseXmlStr(tasks[n].fileData);
 
     // console.log(filePath+":"+fileName+":"+fileData);
     var task = {};
-    task.filePath = tasks[n].filePath;
-    task.fileName = tasks[n].fileName;
-    task.fileData = parsexml.parseXmlStr(tasks[n].fileData);
+    task.filePath = tasks.data[n].filePath;
+    task.fileName = tasks.data[n].fileName;
+    // task.fileData = parsexml.parseXmlStr(tasks[n].fileData);
+    task.fileData = newxmldata;
     task.fileCoding = fileCoding;
 
     // console.log("开始打印");
     // console.log(fileData);
     // continue;
-    dirTrim(filePath, task, function(task){
+    dirTrim(task.filePath, task, function(task){
       writeFile(task);
     });
 
@@ -126,7 +93,6 @@ function dirTrim(dirpath, task, callback){
 function log(str){
   console.log(new Date().toLocaleTimeString()+" # " + str + " ");
 }
-
 
 
 exports.write = writeFileFactory;
